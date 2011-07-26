@@ -1,0 +1,5 @@
+
+Monitor of BitTorrent activity on the LAN.
+The Local Peer Discovery extension makes it quite easy to find out what other
+people on your LAN are downloading or seeding with BitTorrent. Be aware that
+not all clients support LPD and private torrents are not announced this way.
