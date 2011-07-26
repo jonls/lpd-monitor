@@ -1,0 +1,20 @@
+#!/usr/bin/env python
+
+import lpd
+
+if __name__ == '__main__':
+    s = lpd.LPDSocket()
+
+    running = True
+    while running:
+        try:
+            data, sender = s.recv_announce()
+            if data is not None:
+                infohash, port = data
+                print('{!r}: Infohash: {}, Port: {}'.format(sender, infohash, port))
+            else:
+                print('{!r}: Invalid announce.'.format(sender))
+        except KeyboardInterrupt:
+            running = False
+
+    s.close()
