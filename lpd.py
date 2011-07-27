@@ -25,6 +25,14 @@ class LPDSocket(MulticastUDPSocket):
         super(LPDSocket, self).__init__(LPDSocket.PORT)
         self.mcast_add(LPDSocket.ADDRESS)
 
+    def send_announce(self, infohash, port):
+        msg = ('BT-SEARCH * HTTP/1.1\r\n' +
+               'Host: {}:{}\r\n' +
+               'Port: {}\r\n' +
+               'Infohash: {}\r\n' +
+               '\r\n\r\n').format(LPDSocket.ADDRESS, LPDSocket.PORT, port, infohash)
+        self.sendto(msg, 0, (LPDSocket.ADDRESS, LPDSocket.PORT))
+
     def recv_announce(self):
         data, sender = self.recvfrom(1280)
 
