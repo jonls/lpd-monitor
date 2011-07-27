@@ -1,0 +1,198 @@
+#!/usr/bin/env python
+
+import pygtk
+pygtk.require('2.0')
+
+import gobject, glib, gtk, pango
+
+import lpd
+
+class LPDClient(gobject.GObject):
+    __gsignals__ = {
+        'torrent-added': (gobject.SIGNAL_RUN_FIRST, None, (str, int, str)),
+        'torrent-removed': (gobject.SIGNAL_RUN_FIRST, None, (str, int, str)),
+        'torrent-updated': (gobject.SIGNAL_RUN_FIRST, None, (str, int, str))
+        }
+
+    def __init__(self):
+        super(LPDClient, self).__init__()
+
+        self._torrents = {}
+
+        self._socket = lpd.LPDSocket()
+        glib.io_add_watch(self._socket, glib.IO_IN, self._socket_input_cb)
+
+    def _socket_input_cb(self, source, cond):
+        data, sender = self._socket.recv_announce()
+        if data is None:
+            return True
+
+        address, _ = sender
+        infohash, port = data[0].lower(), data[1]
+        torrent = (address, port, infohash)
+
+        is_new = False
+        if torrent not in self._torrents:
+            is_new = True
+        else:
+            glib.source_remove(self._torrents[torrent][1])
+
+        timer = glib.timeout_add_seconds(60*15, self._announce_timer_cb, torrent)
+        self._torrents[torrent] = (glib.get_current_time(), timer)
+
+        if is_new:
+            self.emit('torrent-added', address, port, infohash)
+        else:
+            self.emit('torrent-updated', address, port, infohash)
+
+        return True
+
+    def _announce_timer_cb(self, torrent):
+        self.expire(torrent)
+        return False
+
+    def expire(self, torrent):
+        if torrent in self._torrents:
+            address, port, infohash = torrent
+            del self._torrents[torrent]
+            self.emit('torrent-removed', address, port, infohash)
+
+    @property
+    def torrents(self):
+        return self._torrents.keys()
+
+    def torrent(self, torrent):
+        address, port, infohash = torrent
+        time, _ = self._torrents[torrent]
+        return (address, port, infohash, time)
+
+class TorrentListModel(gtk.GenericTreeModel):
+    _column_type = (str, int, str, float)
+
+    def __init__(self, client):
+        super(TorrentListModel, self).__init__()
+        self._client = client
+        self._update_torrent_list()
+
+        self._client.connect('torrent-added', self._torrent_added_cb)
+        self._client.connect('torrent-removed', self._torrent_removed_cb)
+        self._client.connect('torrent-updated', self._torrent_updated_cb)
+
+    def _update_torrent_list(self):
+        self._torrent_list = list(self._client.torrents)
+
+    def _torrent_added_cb(self, client, address, port, infohash):
+        self._update_torrent_list()
+        path = self._torrent_list.index((address, port, infohash))
+        self.row_inserted(path, self.get_iter(path))
+
+    def _torrent_removed_cb(self, client, address, port, infohash):
+        path = self._torrent_list.index((address, port, infohash))
+        self._update_torrent_list()
+        self.row_deleted(path)
+
+    def _torrent_updated_cb(self, client, address, port, infohash):
+        path = self._torrent_list.index((address, port, infohash))
+        self.row_changed(path, self.get_iter(path))
+
+    def on_get_flags(self):
+        return gtk.TREE_MODEL_LIST_ONLY | gtk.TREE_MODEL_ITERS_PERSIST
+
+    def on_get_n_columns(self):
+        return len(self._column_type)
+
+    def on_get_column_type(self, n):
+        return self._column_type[n]
+
+    def on_get_iter(self, path):
+        try:
+            return self._torrent_list[path[0]]
+        except IndexError:
+            return None
+
+    def on_get_path(self, rowref):
+        return self._torrent_list.index(rowref)
+
+    def on_get_value(self, rowref, column):
+        address, port, infohash, time = self._client.torrent(rowref)
+        if column == 0:
+            return address
+        elif column == 1:
+            return port
+        elif column == 2:
+            return infohash
+        elif column == 3:
+            return time
+
+    def on_iter_next(self, rowref):
+        try:
+            i = self._torrent_list.index(rowref)
+            return self._torrent_list[i+1]
+        except IndexError:
+            return None
+
+    def on_iter_children(self, rowref):
+        return self.on_iter_nth_child(rowref, 0)
+
+    def on_iter_has_child(self, rowref):
+        return False
+
+    def on_iter_n_children(self, rowref):
+        if rowref is not None:
+            return 0
+        return len(self._torrent_list)
+
+    def on_iter_nth_child(self, rowref, n):
+        if rowref is not None:
+            return None
+        try:
+            return self._torrent_list[n]
+        except IndexError:
+            return None
+
+    def on_iter_parent(self, rowref):
+        return None
+
+if __name__ == '__main__':
+    c = LPDClient()
+    m = TorrentListModel(c)
+    t = gtk.TreeView(m)
+
+    def torrents_address_data_cb(column, cell, model, it):
+        cell.set_property('text', '{}:{}'.format(model.get_value(it, 0), model.get_value(it, 1)))
+
+    def torrents_infohash_data_cb(column, cell, model, it):
+        cell.set_property('text', model.get_value(it, 2))
+
+    torrents_address_cell = gtk.CellRendererText()
+    torrents_address_col = gtk.TreeViewColumn('Address', torrents_address_cell)
+    torrents_address_col.set_resizable(True)
+    torrents_address_col.set_cell_data_func(torrents_address_cell, torrents_address_data_cb)
+    t.append_column(torrents_address_col)
+
+    torrents_infohash_cell = gtk.CellRendererText()
+    torrents_infohash_cell.set_property('ellipsize', pango.ELLIPSIZE_END)
+    torrents_infohash_cell.set_property('ellipsize-set', True)
+    torrents_infohash_col = gtk.TreeViewColumn('Infohash', torrents_infohash_cell)
+    torrents_infohash_col.set_resizable(True)
+    torrents_infohash_col.set_cell_data_func(torrents_infohash_cell, torrents_infohash_data_cb)
+    t.append_column(torrents_infohash_col)
+
+    def main_window_destroy_cb(window):
+        gtk.main_quit()
+
+    w = gtk.Window()
+    w.connect('destroy', main_window_destroy_cb)
+    w.add(t)
+    w.show_all()
+
+    def torrent_added_cb(client, address, port, infohash):
+        print('ANNOUNCED: {}:{}: {}'.format(address, port, infohash))
+
+    def torrent_removed_cb(client, address, port, infohash):
+        print('EXPIRED: {}:{}: {}'.format(address, port, infohash))
+
+    c.connect('torrent-added', torrent_added_cb)
+    c.connect('torrent-removed', torrent_removed_cb)
+
+    gtk.main()
