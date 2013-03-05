@@ -1,6 +1,9 @@
 #!/usr/bin/env python
 
+import datetime
 import lpd
+from hashutils import bintohex
+
 
 if __name__ == '__main__':
     s = lpd.LPDSocket()
@@ -9,11 +12,12 @@ if __name__ == '__main__':
     while running:
         try:
             data, sender = s.recv_announce()
+            now = datetime.datetime.now()
             if data is not None:
                 infohash, port = data
-                print('{!r}: Infohash: {}, Port: {}'.format(sender, infohash, port))
+                print('{} {!r}: Infohash: {}, Port: {}'.format(now, sender, bintohex(infohash), port))
             else:
-                print('{!r}: Invalid announce.'.format(sender))
+                print('{} {!r}: Invalid announce.'.format(now, sender))
         except KeyboardInterrupt:
             running = False
 
