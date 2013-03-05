@@ -1,5 +1,22 @@
 
-Monitor of BitTorrent activity on the LAN.
-The Local Peer Discovery extension makes it quite easy to find out what other
-people on your LAN are downloading or seeding with BitTorrent. Be aware that
-not all clients support LPD and private torrents are not announced this way.
+BitTorrent LAN Activity Monitor
+===========
+
+Monitor of BitTorrent activity on the LAN. The Local Peer Discovery extension
+makes it quite easy to find out what other people on your LAN are downloading
+or seeding with BitTorrent. Be aware that not all clients support LPD and private
+torrents are not announced this way.
+
+The main tool `lpd-monitor` simply runs in the background a prints out a line
+whenever a LPD message is received from the LAN. The program listents for UDP
+packets on the multicast address 239.192.152.143 port 6771. The UDP port 6771
+should be opened in any local firewall that may be present.
+
+bt-stat
+-------
+If a peer announces itself on the LAN, the tool `bt-stat` can be used to fetch
+the metadata of the announced infohash, and to check the download progress of
+the peer.
+
+Usage: bt-stat HOST PORT INFOHASH
+Example: bt-stat 192.168.0.17 51051 412051b639a00243c37a5b68c7be03308dc1088f
