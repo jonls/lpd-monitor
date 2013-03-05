@@ -3,6 +3,7 @@
 
 import socket
 import struct
+from hashutils import bintohex, hextobin
 
 class MulticastUDPSocket(socket.socket):
     def __init__(self, local_port, reuse=False):
@@ -22,15 +23,17 @@ class LPDSocket(MulticastUDPSocket):
     PORT = 6771
 
     def __init__(self):
-        super(LPDSocket, self).__init__(LPDSocket.PORT)
+        MulticastUDPSocket.__init__(self, LPDSocket.PORT, True)
         self.mcast_add(LPDSocket.ADDRESS)
+        self.setsockopt(socket.IPPROTO_IP, socket.IP_MULTICAST_TTL, 16)
+        self.setsockopt(socket.IPPROTO_IP, socket.IP_MULTICAST_LOOP, 1)
 
     def send_announce(self, infohash, port):
         msg = ('BT-SEARCH * HTTP/1.1\r\n' +
                'Host: {}:{}\r\n' +
                'Port: {}\r\n' +
                'Infohash: {}\r\n' +
-               '\r\n\r\n').format(LPDSocket.ADDRESS, LPDSocket.PORT, port, infohash)
+               '\r\n\r\n').format(LPDSocket.ADDRESS, LPDSocket.PORT, port, bintohex(infohash))
         self.sendto(msg, 0, (LPDSocket.ADDRESS, LPDSocket.PORT))
 
     def recv_announce(self):
@@ -54,7 +57,12 @@ class LPDSocket(MulticastUDPSocket):
                 except ValueError:
                     return None, sender
             elif name == 'Infohash':
-                infohash = value
+                if len(value) != 40:
+                    return None, sender
+                try:
+                    infohash = hextobin(value)
+                except ValueError:
+                    return None, sender
 
         if port is None or infohash is None:
             return None, sender
