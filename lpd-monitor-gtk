@@ -132,7 +132,7 @@ if __name__ == '__main__':
         cell.set_property('text', model.get_value(it, 0).infohash_hex)
 
     def torrents_update_time_data_cb(column, cell, model, it, data):
-        cell.set_property('text', '')
+        cell.set_property('text', model.get_value(it, 0).update_time)
 
     torrents_infohash_cell = Gtk.CellRendererText()
     torrents_infohash_cell.set_property('ellipsize', Pango.EllipsizeMode.END)
