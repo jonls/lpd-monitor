@@ -15,7 +15,7 @@ class MulticastUDPSocket(socket.socket):
         self.bind(('', local_port))
 
     def mcast_add(self, addr):
-	mreq = struct.pack('=4sl', socket.inet_aton(addr), socket.INADDR_ANY)
+        mreq = struct.pack('=4sl', socket.inet_aton(addr), socket.INADDR_ANY)
         self.setsockopt(socket.IPPROTO_IP, socket.IP_ADD_MEMBERSHIP, mreq)
 
 class LPDSocket(MulticastUDPSocket):
